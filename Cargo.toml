@@ -5,7 +5,7 @@ version = "0.1.0"
 licence = "GPL-3.0-or-later"
 license-file = "LICENSE"
 repository = "https://github.com/ejiek/nomcup/"
-readme = "README.md"
+readme = ".github/README.md"
 authors = ["Vlad Petrov <ejiek@mail.ru>"]
 edition = "2018"
 
