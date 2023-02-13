@@ -6,7 +6,7 @@ license = "GPL-3.0-or-later"
 repository = "https://github.com/ejiek/nomcup/"
 readme = ".github/README.md"
 authors = ["Vlad Petrov <ejiek@pm.me>"]
-edition = "2018"
+edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
