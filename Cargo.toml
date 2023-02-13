@@ -2,8 +2,7 @@
 name = "nomcup"
 description = "Library to parse PKGBUILD files used by pacman the package manager"
 version = "0.1.0"
-licence = "GPL-3.0-or-later"
-license-file = "LICENSE"
+license = "GPL-3.0-or-later"
 repository = "https://github.com/ejiek/nomcup/"
 readme = ".github/README.md"
 authors = ["Vlad Petrov <ejiek@pm.me>"]
