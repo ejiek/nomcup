@@ -114,7 +114,7 @@ mod tests {
 
     #[test]
     fn arch() {
-        let input = "arch=('i686' 'x86_64'\n)";
+        let input = "arch=('i686' 'x86_64')\n";
         let expected = vec!["i686".to_string(), "x86_64".to_string()];
         let (input, arch) = super::PkgBuild::parse_arch(input).unwrap();
         assert_eq!(input, "");
