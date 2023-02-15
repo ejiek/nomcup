@@ -1,8 +1,10 @@
 // A library to parse PKGBUILD files with Rust and Nom
 
 use nom::{
-    bytes::complete::{tag, take_until},
+    branch::permutation,
+    bytes::complete::{tag, take_until, take_while1},
     character::complete::space0,
+    multi::separated_list1,
     IResult,
 };
 
@@ -18,19 +20,23 @@ struct PkgBuild {
 impl PkgBuild {
     // parsing mandatory fields in any order
     fn parse(input: &str) -> IResult<&str, PkgBuild> {
-        let (input, pkgname) = PkgBuild::parse_pkgname(input)?;
-        let (input, pkgver) = PkgBuild::parse_pkgver(input)?;
-        let (input, pkgrel) = PkgBuild::parse_pkgrel(input)?;
-        let (input, arch) = PkgBuild::parse_arch(input)?;
-        Ok((
-            input,
-            PkgBuild {
-                pkgname,
-                pkgver,
-                pkgrel,
-                arch,
-            },
-        ))
+        permutation((
+            PkgBuild::parse_pkgname,
+            PkgBuild::parse_pkgver,
+            PkgBuild::parse_pkgrel,
+            PkgBuild::parse_arch,
+        ))(input)
+        .map(|(next_input, (pkgname, pkgver, pkgrel, arch))| {
+            (
+                next_input,
+                PkgBuild {
+                    pkgname,
+                    pkgver,
+                    pkgrel,
+                    arch,
+                },
+            )
+        })
     }
 
     fn parse_field<'a>(input: &'a str, field: &str) -> IResult<&'a str, String> {
@@ -56,10 +62,24 @@ impl PkgBuild {
     }
 
     fn parse_arch(input: &str) -> IResult<&str, Vec<String>> {
-        let (input, _) = nom::bytes::complete::tag("arch=")(input)?;
-        let (input, arch) = nom::bytes::complete::take_until("\n")(input)?;
-        let arch = arch.split(" ").map(|s| s.to_string()).collect();
-        Ok((input, arch))
+        let (input, _) = tag("arch")(input)?;
+        let (input, _) = space0(input)?;
+        let (input, _) = tag("=")(input)?;
+        let (input, _) = space0(input)?;
+        let (input, _) = tag("(")(input)?;
+        let (input, arches) = take_until(")")(input)?;
+        let (_, arches) = separated_list1(tag(" "), Self::single_quoted)(arches)?;
+        let (input, _) = tag(")")(input)?;
+        let (input, _) = space0(input)?;
+        let (input, _) = tag("\n")(input)?;
+        Ok((input, arches.iter().map(|s| s.to_string()).collect()))
+    }
+
+    fn single_quoted(input: &str) -> IResult<&str, &str> {
+        let (input, _) = tag("'")(input)?;
+        let (input, value) = take_while1(|c| c != '\'')(input)?;
+        let (input, _) = tag("'")(input)?;
+        Ok((input, value))
     }
 }
 
@@ -74,6 +94,7 @@ mod tests {
         assert_eq!(pkgname, expected);
     }
 
+    #[test]
     fn pkgver() {
         let input = "pkgver=1.0\n";
         let expected = "1.0";
@@ -82,11 +103,35 @@ mod tests {
         assert_eq!(pkgver, expected);
     }
 
+    #[test]
     fn pkgrel() {
         let input = "pkgrel=1\n";
         let expected = "1";
         let (input, pkgrel) = super::PkgBuild::parse_pkgrel(input).unwrap();
         assert_eq!(input, "");
         assert_eq!(pkgrel, expected);
+    }
+
+    #[test]
+    fn arch() {
+        let input = "arch=('i686' 'x86_64'\n)";
+        let expected = vec!["i686".to_string(), "x86_64".to_string()];
+        let (input, arch) = super::PkgBuild::parse_arch(input).unwrap();
+        assert_eq!(input, "");
+        assert_eq!(arch, expected);
+    }
+
+    #[test]
+    fn pkgbuild() {
+        let input = "pkgname=foo\npkgver=1.0\npkgrel=1\narch=('i686' 'x86_64')\n";
+        let expected = super::PkgBuild {
+            pkgname: "foo".to_string(),
+            pkgver: "1.0".to_string(),
+            pkgrel: "1".to_string(),
+            arch: vec!["i686".to_string(), "x86_64".to_string()],
+        };
+        let (input, pkgbuild) = super::PkgBuild::parse(input).unwrap();
+        assert_eq!(input, "");
+        assert_eq!(pkgbuild, expected);
     }
 }
