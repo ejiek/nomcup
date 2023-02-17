@@ -5,8 +5,8 @@
 This is a Rust library that parses `PKGBUILD` files used by pacman the package manager.
 
 There are three main sources of inspiration for the name:
-* [namcap](https://projects.archlinux.org/namcap.git/) — a Pacman package analyzer
-* [nOm](https://github.com/Geal/nom) — an awesome Rust library to create parsers
+* [namcap](https://gitlab.archlinux.org/pacman/namcap) — a Pacman package analyzer
+* [nOm](https://github.com/rust-bakery/nom) — an awesome Rust library to create parsers
 * [rUst](https://www.rust-lang.org) — language this library is written in
 
 Now it's a hungry cup, waiting to eat all the tokens from your `PKGBUILD`.
@@ -63,7 +63,12 @@ Or something like that.
 
 It's possible to look for occurrences of version and pkgname in versions but there can be some extra logic (`-git` or anything else).
 
-# Links
+# Relevant third-party Documentation
 
-* [libalpm](https://git.archlinux.org/pacman.git/tree/lib/libalpm) - Arch Linux Package Management (ALPM) library
-* [Pacman homepage](https://archlinux.org/pacman/)
+* [Arch Linux Wiki PKGBUILD page](https://wiki.archlinux.org/title/PKGBUILD)
+* [Pacman manual](https://wiki.archlinux.org/title/PKGBUILD)
+* [Pacman & libalm sources](https://gitlab.archlinux.org/pacman/pacman)
+* [Bash syntax](https://www.gnu.org/software/bash/manual/bash.html#Shell-Syntax)
+* [Arch Linux packaging guidlines](https://wiki.archlinux.org/title/Arch_package_guidelines)
+* [Arch Linux reposity sources](https://github.com/archlinux/svntogit-packages) - PKGBUILD examples
+* [Arch Linux User Repository](https://aur.archlinux.org/) / [gh mirror](https://github.com/archlinux/aur) - PKGBUILD examples
