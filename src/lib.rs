@@ -7,20 +7,83 @@ use nom::{
     sequence::delimited,
     IResult,
 };
-use nom_locate::LocatedSpan;
+use nom_locate::{position, LocatedSpan};
+use std::fmt;
 type Span<'a> = LocatedSpan<&'a str>;
 
 #[derive(Debug, PartialEq)]
-enum Token {
-    Comment(String),
+struct PkgBuild<'a> {
+    Tokens: Vec<Token<'a>>,
+}
+
+impl <'a> PkgBuild<'a> {
+    pub fn from_str(input: &'a str) -> Self {
+        let input = Span::new(input);
+        let (_, tokens) = many0(parse_token)(input).unwrap();
+        PkgBuild { Tokens: tokens }
+    }
+}
+
+impl fmt::Display for PkgBuild <'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for token in &self.Tokens {
+            writeln!(f, "{}", token)?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, PartialEq)]
+enum Token<'a> {
+    Comment(Comment<'a>),
     Assignment(String, AssignmentValue),
     Function(String, String),
+}
+
+impl fmt::Display for Token<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Token::Comment(c) => write!(f, "{}", c),
+            Token::Assignment(k, v) => write!(f, "{}={}", k, v),
+            Token::Function(k, v) => write!(f, "function {} ({})", k, v),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+struct Comment<'a> {
+    comment: String,
+    span: Span<'a>,
+}
+
+impl fmt::Display for Comment<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "#{}", self.comment)
+    }
 }
 
 #[derive(Debug, PartialEq)]
 enum AssignmentValue {
     Literal(Value),
     Array(Vec<Value>),
+}
+
+impl fmt::Display for AssignmentValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            AssignmentValue::Literal(v) => write!(f, "{}", v),
+            AssignmentValue::Array(v) => {
+                write!(f, "(")?;
+                for (i, val) in v.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, " ")?;
+                    }
+                    write!(f, "{}", val)?;
+                }
+                write!(f, ")")
+            }
+        }
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -30,11 +93,28 @@ enum Value {
     Unquoted(String),
 }
 
+impl fmt::Display for Value {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Value::Doublequoted(s) => write!(f, "\"{}\"", s),
+            Value::Singlequoted(s) => write!(f, "'{}'", s),
+            Value::Unquoted(s) => write!(f, "{}", s),
+        }
+    }
+}
+
 fn parse_comment(input: Span) -> IResult<Span, Token> {
+    let (input, pos) = position(input)?;
     let (input, _) = tag("#")(input)?;
     let (input, comment) = take_until("\n")(input)?;
     let (input, _) = tag("\n")(input)?;
-    Ok((input, Token::Comment(comment.to_string())))
+    Ok((
+        input,
+        Token::Comment(Comment {
+            comment: comment.to_string(),
+            span: pos,
+        }),
+    ))
 }
 
 fn parse_assignment(input: Span) -> IResult<Span, Token> {
@@ -108,11 +188,6 @@ fn parse_token(input: Span) -> IResult<Span, Token> {
     alt((parse_comment, parse_assignment, parse_function))(input)
 }
 
-fn parse(input: &str) -> IResult<Span, Vec<Token>> {
-    let input = Span::new(input);
-    many0(parse_token)(input)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -120,45 +195,32 @@ mod tests {
     #[test]
     fn test_parse_comment() {
         let input = Span::new("# this is a comment\npkgname=rust\n");
-        let expected = Token::Comment(" this is a comment".to_string());
         let (input, token) = parse_comment(input).unwrap();
-        assert_eq!(token, expected);
+        assert_eq!(token.to_string(), "# this is a comment");
         assert_eq!(input.to_string(), "pkgname=rust\n");
     }
 
     #[test]
     fn test_parse_literal() {
         let input = Span::new("pkgname=rust\n");
-        let expected = Token::Assignment(
-            "pkgname".to_string(),
-            AssignmentValue::Literal(Value::Unquoted("rust".to_string())),
-        );
         let (input, token) = parse_assignment(input).unwrap();
-        assert_eq!(token, expected);
+        assert_eq!(token.to_string(), "pkgname=rust");
         assert_eq!(input.to_string(), "");
     }
 
     #[test]
     fn test_parse_array() {
         let input = Span::new("arch=('x86_64' 'aarch64')\n");
-        let expected = Token::Assignment(
-            "arch".to_string(),
-            AssignmentValue::Array(vec![
-                Value::Singlequoted("x86_64".to_string()),
-                Value::Singlequoted("aarch64".to_string()),
-            ]),
-        );
         let (input, token) = parse_assignment(input).unwrap();
-        assert_eq!(token, expected);
+        assert_eq!(token.to_string(), "arch=('x86_64' 'aarch64')");
         assert_eq!(input.to_string(), "");
     }
 
     #[test]
     fn test_parse_function() {
         let input = Span::new("function fname ()\n");
-        let expected = Token::Function("fname".to_string(), "".to_string());
         let (input, token) = parse_function(input).unwrap();
-        assert_eq!(token, expected);
+        assert_eq!(token.to_string(), "function fname ()");
         assert_eq!(input.to_string(), "");
     }
 
@@ -167,31 +229,10 @@ mod tests {
         let input = r#"pkgname=rust
 pkgver=1.51.0
 pkgrel=1
+# Comment out of nowhere
 arch=('x86_64' 'aarch64')
 "#;
-        let expected = vec![
-            Token::Assignment(
-                "pkgname".to_string(),
-                AssignmentValue::Literal(Value::Unquoted("rust".to_string())),
-            ),
-            Token::Assignment(
-                "pkgver".to_string(),
-                AssignmentValue::Literal(Value::Unquoted("1.51.0".to_string())),
-            ),
-            Token::Assignment(
-                "pkgrel".to_string(),
-                AssignmentValue::Literal(Value::Unquoted("1".to_string())),
-            ),
-            Token::Assignment(
-                "arch".to_string(),
-                AssignmentValue::Array(vec![
-                    Value::Singlequoted("x86_64".to_string()),
-                    Value::Singlequoted("aarch64".to_string()),
-                ]),
-            ),
-        ];
-        let (input, tokens) = parse(input).unwrap();
-        assert_eq!(tokens, expected);
-        assert_eq!(input.to_string(), "");
+        let parsed_pkgbuild = PkgBuild::from_str(input);
+        assert_eq!(parsed_pkgbuild.to_string(), input);
     }
 }
