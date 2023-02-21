@@ -7,6 +7,8 @@ use nom::{
     sequence::delimited,
     IResult,
 };
+use nom_locate::LocatedSpan;
+type Span<'a> = LocatedSpan<&'a str>;
 
 #[derive(Debug, PartialEq)]
 enum Token {
@@ -28,14 +30,14 @@ enum Value {
     Unquoted(String),
 }
 
-fn parse_comment(input: &str) -> IResult<&str, Token> {
+fn parse_comment(input: Span) -> IResult<Span, Token> {
     let (input, _) = tag("#")(input)?;
     let (input, comment) = take_until("\n")(input)?;
     let (input, _) = tag("\n")(input)?;
     Ok((input, Token::Comment(comment.to_string())))
 }
 
-fn parse_assignment(input: &str) -> IResult<&str, Token> {
+fn parse_assignment(input: Span) -> IResult<Span, Token> {
     let (input, _) = multispace0(input)?; // TODO: Throw a warning if there is whitespace before the assignment
     let (input, key) = take_until("=")(input)?;
     let (input, _) = tag("=")(input)?;
@@ -43,13 +45,13 @@ fn parse_assignment(input: &str) -> IResult<&str, Token> {
     Ok((input, Token::Assignment(key.to_string(), value)))
 }
 
-fn parse_literal(input: &str) -> IResult<&str, AssignmentValue> {
+fn parse_literal(input: Span) -> IResult<Span, AssignmentValue> {
     let (input, value) = alt((parse_doublequoted, parse_singlequoted, parse_unquoted))(input)?;
     let (input, _) = multispace0(input)?; // remove trailing whitespaces and newlines
     Ok((input, AssignmentValue::Literal(value)))
 }
 
-fn parse_array(input: &str) -> IResult<&str, AssignmentValue> {
+fn parse_array(input: Span) -> IResult<Span, AssignmentValue> {
     let (input, _) = tag("(")(input)?;
     let (input, values) = separated_list0(
         tag(" "),
@@ -60,21 +62,21 @@ fn parse_array(input: &str) -> IResult<&str, AssignmentValue> {
     Ok((input, AssignmentValue::Array(values)))
 }
 
-fn parse_singlequoted(input: &str) -> IResult<&str, Value> {
+fn parse_singlequoted(input: Span) -> IResult<Span, Value> {
     let (input, _) = tag("'")(input)?;
     let (input, value) = escaped(is_not("'"), '\\', one_of("'"))(input)?;
     let (input, _) = tag("'")(input)?;
     Ok((input, Value::Singlequoted(value.to_string())))
 }
 
-fn parse_doublequoted(input: &str) -> IResult<&str, Value> {
+fn parse_doublequoted(input: Span) -> IResult<Span, Value> {
     let (input, _) = tag("\"")(input)?;
     let (input, value) = escaped(is_not("\""), '\\', one_of("\""))(input)?;
     let (input, _) = tag("\"")(input)?;
     Ok((input, Value::Doublequoted(value.to_string())))
 }
 
-fn parse_unquoted(input: &str) -> IResult<&str, Value> {
+fn parse_unquoted(input: Span) -> IResult<Span, Value> {
     let (input, value) =
         take_while1(|c: char| c.is_alphanumeric() || c == '_' || c == '-' || c == '.')(input)?;
     Ok((input, Value::Unquoted(value.to_string())))
@@ -88,7 +90,7 @@ fn parse_unquoted(input: &str) -> IResult<&str, Value> {
 // ```bash
 // function fname [()] compound-command
 // ```
-fn parse_function(input: &str) -> IResult<&str, Token> {
+fn parse_function(input: Span) -> IResult<Span, Token> {
     let (input, _) = tag("function ")(input)?;
     let (input, name) = take_until(" ")(input)?;
     let (input, _) = tag(" ")(input)?;
@@ -102,11 +104,12 @@ fn parse_function(input: &str) -> IResult<&str, Token> {
     Ok((input, Token::Function(name.to_string(), args)))
 }
 
-fn parse_token(input: &str) -> IResult<&str, Token> {
+fn parse_token(input: Span) -> IResult<Span, Token> {
     alt((parse_comment, parse_assignment, parse_function))(input)
 }
 
-fn parse(input: &str) -> IResult<&str, Vec<Token>> {
+fn parse(input: &str) -> IResult<Span, Vec<Token>> {
+    let input = Span::new(input);
     many0(parse_token)(input)
 }
 
@@ -116,28 +119,28 @@ mod tests {
 
     #[test]
     fn test_parse_comment() {
-        let input = "# this is a comment\npkgname=rust\n";
+        let input = Span::new("# this is a comment\npkgname=rust\n");
         let expected = Token::Comment(" this is a comment".to_string());
         let (input, token) = parse_comment(input).unwrap();
         assert_eq!(token, expected);
-        assert_eq!(input, "pkgname=rust\n");
+        assert_eq!(input.to_string(), "pkgname=rust\n");
     }
 
     #[test]
     fn test_parse_literal() {
-        let input = "pkgname=rust\n";
+        let input = Span::new("pkgname=rust\n");
         let expected = Token::Assignment(
             "pkgname".to_string(),
             AssignmentValue::Literal(Value::Unquoted("rust".to_string())),
         );
         let (input, token) = parse_assignment(input).unwrap();
         assert_eq!(token, expected);
-        assert_eq!(input, "");
+        assert_eq!(input.to_string(), "");
     }
 
     #[test]
     fn test_parse_array() {
-        let input = "arch=('x86_64' 'aarch64')\n";
+        let input = Span::new("arch=('x86_64' 'aarch64')\n");
         let expected = Token::Assignment(
             "arch".to_string(),
             AssignmentValue::Array(vec![
@@ -147,16 +150,16 @@ mod tests {
         );
         let (input, token) = parse_assignment(input).unwrap();
         assert_eq!(token, expected);
-        assert_eq!(input, "");
+        assert_eq!(input.to_string(), "");
     }
 
     #[test]
     fn test_parse_function() {
-        let input = "function fname ()\n";
+        let input = Span::new("function fname ()\n");
         let expected = Token::Function("fname".to_string(), "".to_string());
         let (input, token) = parse_function(input).unwrap();
         assert_eq!(token, expected);
-        assert_eq!(input, "");
+        assert_eq!(input.to_string(), "");
     }
 
     #[test]
@@ -189,6 +192,6 @@ arch=('x86_64' 'aarch64')
         ];
         let (input, tokens) = parse(input).unwrap();
         assert_eq!(tokens, expected);
-        assert_eq!(input, "");
+        assert_eq!(input.to_string(), "");
     }
 }
