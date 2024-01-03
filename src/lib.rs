@@ -9,7 +9,7 @@ use nom::{
 };
 
 #[derive(Debug, PartialEq)]
-struct PkgBuild {
+pub struct PkgBuild {
     //mandatory fields
     pkgname: Vec<String>,
     pkgver: String,
@@ -19,7 +19,7 @@ struct PkgBuild {
 
 impl PkgBuild {
     // parsing mandatory fields in any order
-    fn parse(input: &str) -> IResult<&str, PkgBuild> {
+    pub fn parse(input: &str) -> IResult<&str, PkgBuild> {
         permutation((
             PkgBuild::parse_pkgname,
             PkgBuild::parse_pkgver,
@@ -49,7 +49,7 @@ impl PkgBuild {
         Ok((input, value.to_string()))
     }
 
-    fn parse_pkgname(input: &str) -> IResult<&str, Vec<String>> {
+    pub fn parse_pkgname(input: &str) -> IResult<&str, Vec<String>> {
         let (input, _) = tag("pkgname")(input)?;
         let (input, _) = space0(input)?;
         let (input, _) = tag("=")(input)?;
@@ -80,15 +80,15 @@ impl PkgBuild {
         Ok((input, names.iter().map(|s| s.to_string()).collect()))
     }
 
-    fn parse_pkgver(input: &str) -> IResult<&str, String> {
+    pub fn parse_pkgver(input: &str) -> IResult<&str, String> {
         Self::parse_field(input, "pkgver")
     }
 
-    fn parse_pkgrel(input: &str) -> IResult<&str, String> {
+    pub fn parse_pkgrel(input: &str) -> IResult<&str, String> {
         Self::parse_field(input, "pkgrel")
     }
 
-    fn parse_arch(input: &str) -> IResult<&str, Vec<String>> {
+    pub fn parse_arch(input: &str) -> IResult<&str, Vec<String>> {
         let (input, _) = tag("arch")(input)?;
         let (input, _) = space0(input)?;
         let (input, _) = tag("=")(input)?;
